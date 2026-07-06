@@ -34,7 +34,7 @@ export class TestBuilderPanel {
 
     const panel = vscode.window.createWebviewPanel(
       'dqBuilder',
-      'DQ Test Builder',
+      'Data Quality Studio',
       column,
       {
         enableScripts: true,
@@ -48,7 +48,7 @@ export class TestBuilderPanel {
 
   loadTable(table: TableInfo) {
     this.panel.reveal();
-    this.panel.webview.postMessage({ type: 'loadTable', table });
+    this.panel.webview.postMessage({ type: 'loadTable', table, dbType: this.connectionConfig?.type ?? null });
   }
 
   setConnection(config: ConnectionConfig) {
@@ -112,7 +112,7 @@ export class TestBuilderPanel {
         const items: CheckItem[] = [
           ...available,
           { label: '', kind: vscode.QuickPickItemKind.Separator, checkId: '' },
-          { label: '$(edit) Custom check', description: 'Write your own condition with a name', checkId: 'custom' },
+          { label: '$(edit) Custom check', description: 'Name + SQL fail condition, run in your warehouse', checkId: 'custom' },
           ...(alreadyAdded.length > 0 ? [
             { label: 'Already added', kind: vscode.QuickPickItemKind.Separator, checkId: '' },
             ...alreadyAdded,
@@ -144,7 +144,7 @@ export class TestBuilderPanel {
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'unsafe-inline';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DQ Test Builder</title>
+  <title>Data Quality Studio</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -445,6 +445,7 @@ export class TestBuilderPanel {
   // App state — framework restored from previous session via globalState
   let state = {
     table: null,
+    dbType: null,
     framework: ${initialFramework},
     checks: {},
     customChecks: {},
@@ -454,6 +455,7 @@ export class TestBuilderPanel {
   window.addEventListener('message', e => {
     const msg = e.data;
     if (msg.type === 'loadTable') {
+      state.dbType = msg.dbType || null;
       loadTable(msg.table);
     } else if (msg.type === 'checkPicked') {
       const col = state.table && state.table.columns.find(c => c.name === msg.columnName);
@@ -642,10 +644,12 @@ export class TestBuilderPanel {
   }
 
   function buildCustomRow(col, customChk, idx) {
-    const fw = state.framework;
-    const placeholder = fw === 'soda'
-      ? 'e.g.  amount < 0 OR amount > 999999'
-      : 'e.g.  amount >= 0 & amount < 999999';
+    // Both frameworks take a SQL fail condition evaluated in the connected
+    // warehouse: Soda as a failed-rows "fail condition", GE as an
+    // UnexpectedRowsExpectation query. Rows matching the condition FAIL.
+    const DIALECTS = { postgres: 'PostgreSQL', redshift: 'Redshift', snowflake: 'Snowflake', bigquery: 'BigQuery' };
+    const dialect = DIALECTS[state.dbType] || 'your warehouse';
+    const placeholder = 'e.g.  amount < 0 OR amount > 999999';
 
     const row = document.createElement('div');
     row.className = 'custom-row';
@@ -681,11 +685,12 @@ export class TestBuilderPanel {
     // Expression field
     const exprLabel = document.createElement('div');
     exprLabel.className = 'custom-field-label';
-    exprLabel.textContent = fw === 'soda' ? 'Fail condition (SodaCL)' : 'Row condition (pandas)';
+    exprLabel.textContent = 'Fail condition (' + dialect + ' SQL)';
     row.appendChild(exprLabel);
 
     const exprInput = document.createElement('textarea');
     exprInput.className = 'custom-expr-input';
+    exprInput.title = 'SQL boolean expression run in ' + dialect + ' — rows matching this condition FAIL the check.';
     exprInput.placeholder = placeholder;
     exprInput.value = customChk.expression || '';
     exprInput.addEventListener('input', () => {

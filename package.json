@@ -2,11 +2,11 @@
   "name": "dq-studio",
   "displayName": "Data Quality Studio — GE & Soda Core",
   "description": "Visual sidebar builder that generates Great Expectations and Soda Core data quality tests from your live database schema — no code required.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tripleaceme/dq-test-builder.git"
+    "url": "https://github.com/tripleaceme/dq-studio.git"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -82,7 +82,7 @@
       ]
     },
     "configuration": {
-      "title": "DQ Test Builder",
+      "title": "Data Quality Studio",
       "properties": {
         "dq-studio.credentialsPath": {
           "type": "string",

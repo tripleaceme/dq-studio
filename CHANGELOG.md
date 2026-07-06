@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.2] — 2026-07-06
+
+### Fixed
+- **GE custom checks generated a non-existent API** — the output called `expect_column_values_to_satisfy(condition_parser="pandas", ...)`, which does not exist in Great Expectations (core or contrib) and would raise `AttributeError` at runtime; `condition_parser="pandas"` is also invalid on SQL data sources. Custom checks now generate `gx.expectations.UnexpectedRowsExpectation(unexpected_rows_query="SELECT * FROM {batch} WHERE <fail condition>")`, which runs natively in the connected warehouse — the same failed-rows semantics Soda uses
+- **Quote escaping in generated GE Python** — custom check names and conditions containing `"` or `\` no longer produce a Python syntax error
+
+### Changed
+- **Custom check UI unified to one SQL fail condition** — no more pandas syntax for GE vs SodaCL for Soda. Both frameworks take a SQL boolean expression (rows matching it fail); the field label shows the connected warehouse's dialect, e.g. `Fail condition (Snowflake SQL)`. The execution engine is auto-derived from the active connection — no engine dropdown needed, since generated tests always run against the connected SQL warehouse
+- **GE generator migrated to GX Core 1.x API** — `context.sources.add_or_update_sql`, `get_validator`, and validator-based checkpoints were removed in GX 1.0, and `pip install great_expectations` installs 1.x today. Generated scripts now use `context.data_sources.add_sql`, `suite.add_expectation(gx.expectations.*)` classes, whole-table batch definitions, and `ValidationDefinition.run()`; install hints use GX extras (e.g. `pip install 'great_expectations[postgresql]'`)
+- **Rebranded remaining "DQ Test Builder" strings to Data Quality Studio** — panel title, generated file headers, and the settings section now match the Marketplace listing
+
+---
+
 ## [0.2.1] — 2026-05-23
 
 ### Fixed

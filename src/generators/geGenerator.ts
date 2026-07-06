@@ -40,76 +40,83 @@ function connectionStringTemplate(cfg: ConnectionConfig | undefined, schema: str
 
 function installLine(type: ConnectionConfig['type'] | undefined): string {
   switch (type) {
-    case 'snowflake': return '# pip install great_expectations snowflake-sqlalchemy';
-    case 'bigquery':  return '# pip install great_expectations sqlalchemy-bigquery google-cloud-bigquery';
-    case 'redshift':  return '# pip install great_expectations sqlalchemy redshift_connector';
-    default:          return '# pip install great_expectations sqlalchemy psycopg2-binary';
+    case 'snowflake': return `# pip install 'great_expectations[snowflake]'`;
+    case 'bigquery':  return `# pip install 'great_expectations[bigquery]'`;
+    case 'redshift':  return `# pip install 'great_expectations[redshift]'`;
+    default:          return `# pip install 'great_expectations[postgresql]'`;
   }
+}
+
+// Escape a value for embedding in a double-quoted Python string
+function pyStr(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 // ── Per-check rendering ─────────────────────────────────────────────────────
 
 function renderCheck(c: SelectedCheck): string {
   const p = c.params;
-  const col = `"${c.columnName}"`;
+  const col = `column="${c.columnName}"`;
+  const add = (expectation: string) => `suite.add_expectation(gx.expectations.${expectation})`;
 
   switch (c.checkId) {
     case 'not_null':
-      return `validator.expect_column_values_to_not_be_null(${col})`;
+      return add(`ExpectColumnValuesToNotBeNull(${col})`);
     case 'unique':
-      return `validator.expect_column_values_to_be_unique(${col})`;
+      return add(`ExpectColumnValuesToBeUnique(${col})`);
     case 'null_percent':
-      return `validator.expect_column_values_to_not_be_null(${col}, mostly=${p['mostly']})`;
+      return add(`ExpectColumnValuesToNotBeNull(${col}, mostly=${p['mostly']})`);
     case 'values_in_set': {
       const vals = p['values'].split(',').map(v => `"${v.trim()}"`).join(', ');
-      return `validator.expect_column_values_to_be_in_set(${col}, value_set=[${vals}])`;
+      return add(`ExpectColumnValuesToBeInSet(${col}, value_set=[${vals}])`);
     }
     case 'values_not_in_set': {
       const vals = p['values'].split(',').map(v => `"${v.trim()}"`).join(', ');
-      return `validator.expect_column_values_to_not_be_in_set(${col}, value_set=[${vals}])`;
+      return add(`ExpectColumnValuesToNotBeInSet(${col}, value_set=[${vals}])`);
     }
     case 'unique_proportion':
-      return `validator.expect_column_proportion_of_unique_values_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnProportionOfUniqueValuesToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'min_between':
-      return `validator.expect_column_min_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnMinToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'max_between':
-      return `validator.expect_column_max_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnMaxToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'mean_between':
-      return `validator.expect_column_mean_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnMeanToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'sum_between':
-      return `validator.expect_column_sum_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnSumToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'stdev_between':
-      return `validator.expect_column_stdev_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnStdevToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'quantile_between':
       return [
-        `validator.expect_column_quantile_values_to_be_between(`,
+        `suite.add_expectation(gx.expectations.ExpectColumnQuantileValuesToBeBetween(`,
         `    ${col},`,
-        `    quantile_ranges={"quantiles": [${p['quantile']}], "value_ranges": [[${p['min']}, ${p['max']}]]}`,
-        `)`,
+        `    quantile_ranges={"quantiles": [${p['quantile']}], "value_ranges": [[${p['min']}, ${p['max']}]]},`,
+        `))`,
       ].join('\n');
     case 'length_between':
-      return `validator.expect_column_value_lengths_to_be_between(${col}, min_value=${p['min']}, max_value=${p['max']})`;
+      return add(`ExpectColumnValueLengthsToBeBetween(${col}, min_value=${p['min']}, max_value=${p['max']})`);
     case 'match_regex':
-      return `validator.expect_column_values_to_match_regex(${col}, regex=r"${p['regex']}")`;
+      return add(`ExpectColumnValuesToMatchRegex(${col}, regex=r"${p['regex']}")`);
     case 'strftime_format':
-      return `validator.expect_column_values_to_match_strftime_format(${col}, strftime_format="${p['format']}")`;
+      return add(`ExpectColumnValuesToMatchStrftimeFormat(${col}, strftime_format="${p['format']}")`);
     case 'date_parseable':
-      return `validator.expect_column_values_to_be_dateutil_parseable(${col})`;
+      return add(`ExpectColumnValuesToBeDateutilParseable(${col})`);
     case 'date_between':
-      return `validator.expect_column_values_to_be_between(${col}, min_value="${p['min']}", max_value="${p['max']}")`;
+      return add(`ExpectColumnValuesToBeBetween(${col}, min_value="${p['min']}", max_value="${p['max']}")`);
     default:
       return `# unknown check: ${c.checkId}`;
   }
 }
 
+// Custom checks run as native SQL in the connected warehouse: rows returned by
+// the query (i.e. rows matching the fail condition) fail the expectation.
+// {batch} is replaced by GX with the configured table asset at run time.
 function renderCustom(c: CustomCheck): string {
   return [
-    `validator.expect_column_values_to_satisfy(`,
-    `    column="${c.columnName}",`,
-    `    condition_parser="pandas",`,
-    `    row_condition="${c.expression}",`,
-    `    meta={"name": "${c.name}"}`,
-    `)`,
+    `suite.add_expectation(gx.expectations.UnexpectedRowsExpectation(`,
+    `    unexpected_rows_query="SELECT * FROM {batch} WHERE ${pyStr(c.expression)}",`,
+    `    description="${pyStr(c.name)}",`,
+    `))`,
   ].join('\n');
 }
 
@@ -120,14 +127,14 @@ export function generateGE(req: GenerateRequest): string {
   const fqn       = `${table.schema}.${table.table}`;
   const suiteName = `${table.table}_suite`;
   const dsName    = `${table.schema}_datasource`;
-  const ckptName  = `${table.table}_checkpoint`;
+  const valName   = `${table.table}_validation`;
 
   const connStr = connectionStringTemplate(connectionConfig, table.schema);
   const isBigQuery = connectionConfig?.type === 'bigquery';
 
   const lines: string[] = [
-    `# Great Expectations — ${fqn}`,
-    `# Generated by DQ Test Builder`,
+    `# Great Expectations (GX Core 1.x) — ${fqn}`,
+    `# Generated by Data Quality Studio`,
     `#`,
     installLine(connectionConfig?.type),
     `#`,
@@ -145,7 +152,7 @@ export function generateGE(req: GenerateRequest): string {
     ``,
     `context = gx.get_context()`,
     ``,
-    `# ── Datasource ─────────────────────────────────────────────────────────────`,
+    `# ── Data source ─────────────────────────────────────────────────────────────`,
     ...(isBigQuery
       ? [`CONNECTION_STRING = "${connStr}"`]
       : [
@@ -154,24 +161,19 @@ export function generateGE(req: GenerateRequest): string {
         ]
     ),
     ``,
-    `datasource = context.sources.add_or_update_sql(`,
+    `data_source = context.data_sources.add_sql(`,
     `    name="${dsName}",`,
     `    connection_string=CONNECTION_STRING,`,
     `)`,
-    `asset = datasource.add_table_asset(`,
-    `    "${table.table}",`,
+    `asset = data_source.add_table_asset(`,
+    `    name="${table.table}",`,
     `    table_name="${table.table}",`,
     `    schema_name="${table.schema}",`,
     `)`,
-    `batch_request = asset.build_batch_request()`,
+    `batch_definition = asset.add_batch_definition_whole_table("${table.table}_full_table")`,
     ``,
     `# ── Expectation suite ───────────────────────────────────────────────────────`,
-    `suite_name = "${suiteName}"`,
-    `suite = context.add_or_update_expectation_suite(expectation_suite_name=suite_name)`,
-    `validator = context.get_validator(`,
-    `    batch_request=batch_request,`,
-    `    expectation_suite_name=suite_name,`,
-    `)`,
+    `suite = context.suites.add(gx.ExpectationSuite(name="${suiteName}"))`,
     ``,
     `# ── Checks ──────────────────────────────────────────────────────────────────`,
   ];
@@ -189,21 +191,18 @@ export function generateGE(req: GenerateRequest): string {
   }
 
   for (const c of customChecks) {
-    lines.push(`# ${c.columnName} — custom: ${c.name}`);
+    lines.push(`# ${c.columnName} — custom: ${c.name} (rows matching the condition fail)`);
     lines.push(renderCustom(c));
     lines.push('');
   }
 
   lines.push(
-    `validator.save_expectation_suite(discard_failed_expectations=False)`,
-    ``,
     `# ── Run validation ──────────────────────────────────────────────────────────`,
-    `checkpoint = context.add_or_update_checkpoint(`,
-    `    name="${ckptName}",`,
-    `    validator=validator,`,
+    `validation = context.validation_definitions.add(`,
+    `    gx.ValidationDefinition(name="${valName}", data=batch_definition, suite=suite)`,
     `)`,
-    `result = checkpoint.run()`,
-    `print(result)`,
+    `results = validation.run()`,
+    `print(results)`,
     ``,
   );
 

@@ -10,7 +10,7 @@ const config = {
   format: 'cjs',
   platform: 'node',
   target: 'node18',
-  sourcemap: true,
+  sourcemap: isWatch,
   minify: !isWatch,
 };
 
