@@ -4,7 +4,7 @@
 
 Connect to your live database **or just point it at local CSV/Excel/Parquet files** and browse tables directly in the VS Code sidebar, pick checks from a full catalog filtered to each column's data type, and generate ready-to-run **SodaCL YAML** or **Great Expectations Python** in one click.
 
----
+
 
 ## How It Works
 
@@ -18,7 +18,7 @@ No database? Click **⚙ → Local files** and select CSV, Excel (`.xlsx`), or P
 
 Click any table to open the test builder panel.
 
----
+
 
 ### 2. Pick your framework — once per session
 
@@ -28,7 +28,7 @@ Choose **Soda Core** or **Great Expectations** the first time you open a table. 
 
 Checks are tailored to the framework you pick. There is no mixing: Soda checks produce SodaCL YAML, GE checks produce Python.
 
----
+
 
 ### 3. Add checks per column
 
@@ -38,7 +38,7 @@ Every column is shown with its data type badge. Click a column to expand it and 
 
 Numeric columns get range checks (min, max, avg, sum, percentile). Text columns get length and regex checks. Timestamp columns get freshness and date-range checks. Booleans and categoricals get value-set checks. Every column gets null and uniqueness checks.
 
----
+
 
 ### 4. Generate — opens in a new editor tab
 
@@ -50,7 +50,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 
 ![Soda Core YAML with configuration hint](media/Soda-dim_channels-test.png)
 
----
+
 
 ## Features
 
@@ -68,12 +68,12 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 - **Generated output uses your real connection details:** host, port, database, user, and schema are filled in; only the password stays as an environment variable placeholder
 - **Framework-specific configuration hints:** Soda output includes a ready-to-fill `configuration.yml` block; GE output includes the correct `pip install` line and `DATABASE_URL` export command
 
----
+
 
 ## Supported Data Sources
 
 | Source | Auto-detect | Manual |
-|---|---|---|
+||||
 | PostgreSQL | `~/.dbt/profiles.yml` · `.env` | Connection string |
 | Redshift | `~/.dbt/profiles.yml` | Connection string |
 | Snowflake | `~/.dbt/profiles.yml` | Browse for `profiles.yml` |
@@ -90,14 +90,14 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 - Generated **GE** output uses an in-memory DuckDB engine with a query asset over `read_csv_auto(...)` / `read_xlsx(...)` / `read_parquet(...)` (`pip install great_expectations duckdb duckdb-engine`). DuckDB auto-installs its `excel` extension on first use
 - Custom SQL fail conditions work exactly as with a warehouse.
 
----
+
 
 ## Full Check Catalog
 
 ### Soda Core (SodaCL)
 
 | Check | Applies to | What it generates |
-|---|---|---|
+||||
 | Missing (null) count | All | `missing_count(col) = 0` |
 | Duplicate count | All | `duplicate_count(col) = 0` |
 | Missing % threshold | All | `missing_percent(col) < N` |
@@ -120,7 +120,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 ### Great Expectations
 
 | Check | Applies to | What it generates |
-|---|---|---|
+||||
 | Not Null | All | `expect_column_values_to_not_be_null` |
 | Unique | All | `expect_column_values_to_be_unique` |
 | Mostly not null (%) | All | `expect_column_values_to_not_be_null(mostly=N)` |
@@ -140,7 +140,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 | Date range | Timestamp | `expect_column_values_to_be_between` |
 | **Custom check** | All | `UnexpectedRowsExpectation` — `SELECT * FROM {batch} WHERE <fail condition>` in native SQL |
 
----
+
 
 ## Generated Output
 
@@ -243,7 +243,7 @@ results = validation.run()
 print(results)
 ```
 
----
+
 
 ## Connection Setup
 
@@ -280,7 +280,7 @@ Set `dq-studio.credentialsPath` in VS Code Settings (or `settings.json`) to avoi
 
 Supports `~` for the home directory. Accepts `profiles.yml`, service account JSON, or `.env` files.
 
----
+
 
 ## Requirements
 
@@ -288,13 +288,13 @@ Supports `~` for the home directory. Accepts `profiles.yml`, service account JSO
 - A running **PostgreSQL, Redshift, Snowflake, or BigQuery** database accessible from your machine — **or local CSV/Excel/Parquet files** (no database required)
 - **Python** with `great_expectations` (GX Core 1.x) or `soda-core-*` installed, only needed to *run* the generated tests, not to use the extension itself
 
----
+
 
 ## Privacy
 
 The extension connects only to the database you configure. No data, queries, or schema information is sent anywhere other than your own database server.
 
----
+
 
 ## License
 
