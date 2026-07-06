@@ -2,7 +2,7 @@
   "name": "dq-studio",
   "displayName": "Data Quality Studio — GE & Soda Core",
   "description": "Visual builder that generates Great Expectations and Soda Core data quality tests from your live database or local CSV/Excel/Parquet files.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
@@ -12,12 +12,10 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other",
-    "Visualization",
     "Data Science",
     "Testing",
-    "Formatters",
-    "Snippets"
+    "Visualization",
+    "Other"
   ],
   "keywords": [
     "data quality",

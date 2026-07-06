@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1] — 2026-07-06
+
+### Changed
+- Marketplace metadata: tightened description, categories set to Data Science / Testing / Visualization / Other, README formatting polish
+
+---
+
 ## [0.4.0] — 2026-07-06
 
 ### Added
