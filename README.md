@@ -12,7 +12,7 @@ Connect to your live database **or just point it at local CSV/Excel/Parquet file
 
 The extension auto-detects your credentials from `~/.dbt/profiles.yml` or a workspace `.env` file on startup for database connections. Your schemas and tables appear immediately in the **Data Quality** sidebar, no configuration required if you already have dbt set up.
 
-No database? Click **⚙ → Local files** and select CSV, Excel (`.xlsx`), or Parquet files instead — each file appears as a table with its columns and inferred types, and the generated tests query the files with [DuckDB](https://duckdb.org). Your file selection is remembered across sessions.
+No database? Click **⚙ → Local files** and select CSV, Excel (`.xlsx`), or Parquet files instead, each file appears as a table with its columns and inferred types, and the generated tests query the files with [DuckDB](https://duckdb.org). Your file selection is remembered across sessions.
 
 ![Sidebar tree and framework picker](media/schema-table-framework%20view.png)
 
@@ -55,7 +55,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 ## Features
 
 - **Zero-config auto-connect:** Reads `~/.dbt/profiles.yml` (resolves `{{ env_var('...') }}` templates), workspace `.env`, or a custom path you set once in VS Code settings
-- **Works without a database:** Select local **CSV, Excel, or Parquet files** — column names and types are inferred from the files themselves, and generated tests run against them with DuckDB (`soda-core-duckdb` / `duckdb-engine`). No server, no credentials
+- **Works without a database:** Select local **CSV, Excel, or Parquet files**. Column names and types are inferred from the files themselves, and generated tests run against them with DuckDB (`soda-core-duckdb` / `duckdb-engine`). No server, no credentials
 - **Live schema browser:** schemas → tables loaded directly from your database; refresh any time with the ↺ button
 - **One-time framework choice:** Pick Soda Core or Great Expectations once; the choice persists across sessions and across tables
 - **Full check catalog:** 18 Soda checks + 17 GE checks, each filtered to the column data types they apply to:
@@ -64,7 +64,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
   - String patterns — regex match, length bounds, date format strings
   - Timestamps & freshness — freshness window, date min/max, parseable dates
 - **VS Code-native check picker:** `+ Add check` opens the command palette at the top of the editor, not a clipped inline dropdown
-- **Custom checks:** Write any check the catalog doesn't cover: give it a name and a **SQL fail condition** (rows matching it fail). The condition runs in your warehouse's own SQL dialect — shown in the field label — and generates a SodaCL failed-rows check or a GE `UnexpectedRowsExpectation` depending on your framework
+- **Custom checks:** Write any check the catalog doesn't cover: give it a name and a **SQL fail condition** (rows matching it fail). The condition runs in your warehouse's own SQL dialect shown in the field label and generates a SodaCL failed-rows check or a GE `UnexpectedRowsExpectation` depending on your framework
 - **Generated output uses your real connection details:** host, port, database, user, and schema are filled in; only the password stays as an environment variable placeholder
 - **Framework-specific configuration hints:** Soda output includes a ready-to-fill `configuration.yml` block; GE output includes the correct `pip install` line and `DATABASE_URL` export command
 
@@ -88,7 +88,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 - **CSV:** column types are inferred from a sample of the file (integer, double, boolean, timestamp, varchar) — the same way DuckDB's `read_csv_auto` sniffs them. **Excel:** types are read from the typed cells of the first sheet. **Parquet:** types come straight from the file's own schema metadata
 - Generated **Soda** output uses a `type: duckdb` data source pointing at the file (`pip install soda-core-duckdb`). Excel needs a one-time bootstrap — the generated file includes the exact one-liner that builds a small `.duckdb` view over the sheet, since Soda cannot open `.xlsx` directly
 - Generated **GE** output uses an in-memory DuckDB engine with a query asset over `read_csv_auto(...)` / `read_xlsx(...)` / `read_parquet(...)` (`pip install great_expectations duckdb duckdb-engine`). DuckDB auto-installs its `excel` extension on first use
-- Custom SQL fail conditions work exactly as with a warehouse — written in DuckDB's SQL dialect
+- Custom SQL fail conditions work exactly as with a warehouse.
 
 ---
 
