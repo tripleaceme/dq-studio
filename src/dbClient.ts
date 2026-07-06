@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { Client } from 'pg';
 import { ColumnInfo, ConnectionConfig, DataTypeCategory } from './types';
 
@@ -199,12 +201,167 @@ class BigQueryAdapter implements DbAdapter {
   }
 }
 
+// ── Local files (CSV / Parquet) — schema inferred in-process ────────────────
+// No database needed: the tree shows each file as a table under a 'files'
+// schema. Generated tests query the files with DuckDB on the Python side.
+
+export function fileStem(filePath: string): string {
+  return path.basename(filePath).replace(/\.[^.]+$/, '');
+}
+
+// Minimal CSV parser: handles quoted fields, embedded delimiters/newlines.
+// Delimiter sniffed from the header line (comma, semicolon, tab, pipe).
+function parseCsv(text: string, maxRows: number): string[][] {
+  const headerLine = text.slice(0, text.indexOf('\n') === -1 ? text.length : text.indexOf('\n'));
+  const delimiter = [',', ';', '\t', '|']
+    .map(d => ({ d, n: headerLine.split(d).length }))
+    .sort((a, b) => b.n - a.n)[0].d;
+
+  const rows: string[][] = [];
+  let field = '', row: string[] = [], inQuotes = false;
+  for (let i = 0; i < text.length && rows.length < maxRows; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delimiter) {
+      row.push(field); field = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += ch;
+  }
+  if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function isDateLike(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?([+-]\d{2}:?\d{2}|Z)?)?$/.test(v)
+      || /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(v);
+}
+
+function inferCsvType(values: string[]): { rawType: string; category: DataTypeCategory } {
+  const nonEmpty = values.filter(v => v.trim() !== '');
+  if (nonEmpty.length === 0) return { rawType: 'varchar', category: 'text' };
+  if (nonEmpty.every(v => /^(true|false)$/i.test(v)))                        return { rawType: 'boolean',   category: 'boolean' };
+  if (nonEmpty.every(v => /^-?\d+$/.test(v)))                                return { rawType: 'bigint',    category: 'integer' };
+  if (nonEmpty.every(v => /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(v)))   return { rawType: 'double',    category: 'numeric' };
+  if (nonEmpty.every(isDateLike))                                            return { rawType: 'timestamp', category: 'timestamp' };
+  return { rawType: 'varchar', category: 'text' };
+}
+
+const CSV_SAMPLE_BYTES = 256 * 1024;
+const CSV_SAMPLE_ROWS  = 200;
+
+function csvColumns(filePath: string): ColumnInfo[] {
+  const fd = fs.openSync(filePath, 'r');
+  let text: string;
+  try {
+    const buf = Buffer.alloc(Math.min(CSV_SAMPLE_BYTES, fs.fstatSync(fd).size));
+    fs.readSync(fd, buf, 0, buf.length, 0);
+    text = buf.toString('utf8');
+  } finally { fs.closeSync(fd); }
+
+  // Drop a possibly truncated last line from the sample
+  const lastNewline = text.lastIndexOf('\n');
+  if (lastNewline > 0 && text.length === CSV_SAMPLE_BYTES) text = text.slice(0, lastNewline);
+
+  const rows = parseCsv(text, CSV_SAMPLE_ROWS + 1);
+  if (rows.length === 0) throw new Error(`${path.basename(filePath)} appears to be empty`);
+
+  const header = rows[0].map(h => h.trim());
+  const sample = rows.slice(1);
+  return header.map((name, idx) => {
+    const values = sample.map(r => r[idx] ?? '');
+    const { rawType, category } = inferCsvType(values);
+    return {
+      name: name || `column_${idx}`,
+      rawType,
+      category,
+      isNullable: values.some(v => v.trim() === ''),
+    };
+  });
+}
+
+// hyparquet SchemaElement — declared locally to keep the import dynamic-safe
+interface ParquetSchemaElement {
+  name: string;
+  type?: string;
+  num_children?: number;
+  converted_type?: string;
+  logical_type?: { type: string };
+  repetition_type?: string;
+}
+
+function parquetType(el: ParquetSchemaElement): { rawType: string; category: DataTypeCategory } {
+  const logical = el.logical_type?.type;
+  const converted = el.converted_type;
+  if (logical === 'TIMESTAMP' || logical === 'DATE' || el.type === 'INT96'
+      || converted === 'TIMESTAMP_MILLIS' || converted === 'TIMESTAMP_MICROS' || converted === 'DATE') {
+    return { rawType: 'timestamp', category: 'timestamp' };
+  }
+  if (logical === 'DECIMAL' || converted === 'DECIMAL') return { rawType: 'decimal', category: 'numeric' };
+  if (logical === 'STRING' || converted === 'UTF8')     return { rawType: 'varchar', category: 'text' };
+  switch (el.type) {
+    case 'BOOLEAN':               return { rawType: 'boolean', category: 'boolean' };
+    case 'INT32': case 'INT64':   return { rawType: el.type.toLowerCase(), category: 'integer' };
+    case 'FLOAT': case 'DOUBLE':  return { rawType: el.type.toLowerCase(), category: 'numeric' };
+    case 'BYTE_ARRAY':
+    case 'FIXED_LEN_BYTE_ARRAY':  return { rawType: 'varchar', category: 'text' };
+    default:                      return { rawType: String(el.type ?? 'unknown').toLowerCase(), category: 'other' };
+  }
+}
+
+async function parquetColumns(filePath: string): Promise<ColumnInfo[]> {
+  const { parquetMetadata } = await import('hyparquet');
+  const buf = fs.readFileSync(filePath);
+  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  const meta = parquetMetadata(ab as ArrayBuffer);
+  const elements = (meta.schema as ParquetSchemaElement[]).slice(1); // [0] is the root
+  return elements
+    .filter(el => !el.num_children) // leaf columns only; nested groups are skipped
+    .map(el => ({
+      name: el.name,
+      ...parquetType(el),
+      isNullable: el.repetition_type !== 'REQUIRED',
+    }));
+}
+
+class LocalFilesAdapter implements DbAdapter {
+  constructor(private config: ConnectionConfig) {}
+
+  private files(): string[] { return this.config.files ?? []; }
+
+  async testConnection() {
+    if (this.files().length === 0) throw new Error('No data files selected.');
+    const missing = this.files().filter(f => !fs.existsSync(f));
+    if (missing.length > 0) throw new Error(`File not found: ${missing.join(', ')}`);
+  }
+
+  async getSchemas() { return ['files']; }
+
+  async getTables() { return this.files().map(fileStem).sort(); }
+
+  async getColumns(_schema: string, table: string): Promise<ColumnInfo[]> {
+    const file = this.files().find(f => fileStem(f) === table);
+    if (!file) throw new Error(`No local file matches table "${table}"`);
+    return file.toLowerCase().endsWith('.parquet') ? parquetColumns(file) : csvColumns(file);
+  }
+}
+
 // ── Factory + public DbClient ───────────────────────────────────────────────
 
 export function createAdapter(config: ConnectionConfig): DbAdapter {
   switch (config.type) {
     case 'snowflake': return new SnowflakeAdapter(config);
     case 'bigquery':  return new BigQueryAdapter(config);
+    case 'duckdb':    return new LocalFilesAdapter(config);
     default:          return new PostgresAdapter(config);
   }
 }

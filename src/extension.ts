@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { detectConnection, promptForConnection } from './connectionDetector';
 import { DbClient } from './dbClient';
@@ -5,10 +6,21 @@ import { SchemaTreeProvider } from './schemaTreeProvider';
 import { TestBuilderPanel } from './testBuilderPanel';
 import { ColumnInfo, ConnectionConfig } from './types';
 
+const LOCAL_FILES_KEY = 'dq-studio.localFiles';
+const LAST_TYPE_KEY   = 'dq-studio.lastConnectionType';
+
 let dbClient: DbClient | null = null;
 let treeProvider: SchemaTreeProvider;
+let extContext: vscode.ExtensionContext;
+
+// Restore a previous local-files session; files that no longer exist are dropped
+function savedLocalFilesConfig(): ConnectionConfig | null {
+  const files = (extContext.globalState.get<string[]>(LOCAL_FILES_KEY) ?? []).filter(f => fs.existsSync(f));
+  return files.length > 0 ? { type: 'duckdb', files, database: 'local files' } : null;
+}
 
 export async function activate(context: vscode.ExtensionContext) {
+  extContext = context;
   treeProvider = new SchemaTreeProvider();
 
   const treeView = vscode.window.createTreeView('dq-schema-tree', {
@@ -16,12 +28,16 @@ export async function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
 
-  // Auto-detect from ~/.dbt/profiles.yml / .env on startup
-  const config = await detectConnection();
+  // Auto-detect on startup. If the last session used local files, restore that
+  // selection; otherwise try ~/.dbt/profiles.yml / .env, then fall back to files.
+  const preferFiles = context.globalState.get<string>(LAST_TYPE_KEY) === 'duckdb';
+  const config = (preferFiles ? savedLocalFilesConfig() : null)
+    ?? await detectConnection()
+    ?? savedLocalFilesConfig();
   if (config) {
     await connectWithConfig(config);
   } else {
-    treeProvider.setError('No credentials found. Click ⚙ to select your profiles.yml or credentials file.');
+    treeProvider.setError('No credentials found. Click ⚙ to select your profiles.yml, credentials file, or local CSV/Parquet files.');
   }
 
   // Command: open table in webview
@@ -88,8 +104,18 @@ async function connectWithConfig(config: ConnectionConfig) {
     dbClient = client;
     treeProvider.setClient(dbClient);
     TestBuilderPanel.instance?.setConnection(config);
+
+    // Remember what worked so the next session restores it without prompting
+    await extContext.globalState.update(LAST_TYPE_KEY, config.type);
+    if (config.type === 'duckdb' && config.files) {
+      await extContext.globalState.update(LOCAL_FILES_KEY, config.files);
+    }
+
+    const target = config.type === 'duckdb'
+      ? `${config.files?.length ?? 0} local file${(config.files?.length ?? 0) === 1 ? '' : 's'}`
+      : config.database;
     vscode.window.setStatusBarMessage(
-      `$(database) DQ Builder connected to ${config.database}`,
+      `$(database) DQ Studio connected to ${target}`,
       5000
     );
   } catch (err: unknown) {

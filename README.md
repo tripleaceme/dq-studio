@@ -2,7 +2,7 @@
 
 > Build production-ready data quality tests visually, no memorising SodaCL or Great Expectations syntax.
 
-Connect to your live database, browse schemas and tables directly in the VS Code sidebar, pick checks from a full catalog filtered to each column's data type, and generate ready-to-run **SodaCL YAML** or **Great Expectations Python** in one click.
+Connect to your live database — **or just point it at local CSV/Parquet files, no database needed** — browse tables directly in the VS Code sidebar, pick checks from a full catalog filtered to each column's data type, and generate ready-to-run **SodaCL YAML** or **Great Expectations Python** in one click.
 
 ---
 
@@ -11,6 +11,8 @@ Connect to your live database, browse schemas and tables directly in the VS Code
 ### 1. Connect and browse your database
 
 The extension auto-detects your credentials from `~/.dbt/profiles.yml` or a workspace `.env` file on startup. Your schemas and tables appear immediately in the **Data Quality** sidebar, no configuration required if you already have dbt set up.
+
+No database? Click **⚙ → Local files** and select CSV or Parquet files instead — each file appears as a table with its columns and inferred types, and the generated tests query the files with [DuckDB](https://duckdb.org). Your file selection is remembered across sessions.
 
 ![Sidebar tree and framework picker](media/schema-table-framework%20view.png)
 
@@ -53,6 +55,7 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 ## Features
 
 - **Zero-config auto-connect:** Reads `~/.dbt/profiles.yml` (resolves `{{ env_var('...') }}` templates), workspace `.env`, or a custom path you set once in VS Code settings
+- **Works without a database:** Select local **CSV or Parquet files** — column names and types are inferred from the files themselves, and generated tests run against them with DuckDB (`soda-core-duckdb` / `duckdb-engine`). No server, no credentials
 - **Live schema browser:** schemas → tables loaded directly from your database; refresh any time with the ↺ button
 - **One-time framework choice:** Pick Soda Core or Great Expectations once; the choice persists across sessions and across tables
 - **Full check catalog:** 18 Soda checks + 17 GE checks, each filtered to the column data types they apply to:
@@ -67,16 +70,25 @@ Click **Generate Tests**. The output opens in a new editor tab with the correct 
 
 ---
 
-## Supported Databases
+## Supported Data Sources
 
-| Database | Auto-detect | Manual |
+| Source | Auto-detect | Manual |
 |---|---|---|
 | PostgreSQL | `~/.dbt/profiles.yml` · `.env` | Connection string |
 | Redshift | `~/.dbt/profiles.yml` | Connection string |
 | Snowflake | `~/.dbt/profiles.yml` | Browse for `profiles.yml` |
 | BigQuery | `~/.dbt/profiles.yml` | Browse for service account JSON |
+| Local files (CSV / Parquet) | Last selection restored on startup | ⚙ → Local files → pick files |
 
 **Custom credentials path:** Set `dq-studio.credentialsPath` in VS Code Settings to point at any `profiles.yml`, BigQuery service account JSON, or `.env` file. The extension uses that path instead of the default lookup. Supports `~` for the home directory.
+
+### Local files — how it works
+
+- Each selected file becomes a table (named after the file, e.g. `orders.csv` → `orders`) under a `files` schema in the sidebar
+- **CSV:** column types are inferred from a sample of the file (integer, double, boolean, timestamp, varchar) — the same way DuckDB's `read_csv_auto` sniffs them. **Parquet:** types come straight from the file's own schema metadata
+- Generated **Soda** output uses a `type: duckdb` data source pointing at the file (`pip install soda-core-duckdb`)
+- Generated **GE** output uses an in-memory DuckDB engine with a query asset over `read_csv_auto(...)` / `read_parquet(...)` (`pip install great_expectations duckdb duckdb-engine`)
+- Custom SQL fail conditions work exactly as with a warehouse — written in DuckDB's SQL dialect
 
 ---
 
@@ -273,7 +285,7 @@ Supports `~` for the home directory. Accepts `profiles.yml`, service account JSO
 ## Requirements
 
 - **VS Code** 1.85 or later
-- A running **PostgreSQL, Redshift, Snowflake, or BigQuery** database accessible from your machine
+- A running **PostgreSQL, Redshift, Snowflake, or BigQuery** database accessible from your machine — **or local CSV/Parquet files** (no database required)
 - **Python** with `great_expectations` (GX Core 1.x) or `soda-core-*` installed, only needed to *run* the generated tests, not to use the extension itself
 
 ---

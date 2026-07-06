@@ -647,7 +647,7 @@ export class TestBuilderPanel {
     // Both frameworks take a SQL fail condition evaluated in the connected
     // warehouse: Soda as a failed-rows "fail condition", GE as an
     // UnexpectedRowsExpectation query. Rows matching the condition FAIL.
-    const DIALECTS = { postgres: 'PostgreSQL', redshift: 'Redshift', snowflake: 'Snowflake', bigquery: 'BigQuery' };
+    const DIALECTS = { postgres: 'PostgreSQL', redshift: 'Redshift', snowflake: 'Snowflake', bigquery: 'BigQuery', duckdb: 'DuckDB' };
     const dialect = DIALECTS[state.dbType] || 'your warehouse';
     const placeholder = 'e.g.  amount < 0 OR amount > 999999';
 

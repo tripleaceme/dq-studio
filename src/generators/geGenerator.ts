@@ -28,6 +28,9 @@ function connectionStringTemplate(cfg: ConnectionConfig | undefined, schema: str
       const db = cfg.database ?? 'YOUR_DATABASE';
       return `redshift+redshift_connector://${u}:YOUR_PASSWORD@${h}:${p}/${db}`;
     }
+    case 'duckdb':
+      // In-memory engine; the query asset reads the file directly
+      return 'duckdb:///:memory:';
     default: {
       const u  = cfg.user     ?? 'YOUR_USER';
       const h  = cfg.host     ?? 'YOUR_HOST';
@@ -43,8 +46,20 @@ function installLine(type: ConnectionConfig['type'] | undefined): string {
     case 'snowflake': return `# pip install 'great_expectations[snowflake]'`;
     case 'bigquery':  return `# pip install 'great_expectations[bigquery]'`;
     case 'redshift':  return `# pip install 'great_expectations[redshift]'`;
+    case 'duckdb':    return `# pip install great_expectations duckdb duckdb-engine`;
     default:          return `# pip install 'great_expectations[postgresql]'`;
   }
+}
+
+// DuckDB SELECT over the local file backing this table
+function duckdbFileQuery(cfg: ConnectionConfig | undefined, table: string): string {
+  const file = cfg?.files?.find(f => {
+    const base = f.split(/[\\/]/).pop() ?? f;
+    return base.replace(/\.[^.]+$/, '') === table;
+  }) ?? `/path/to/${table}.csv`;
+  const escaped = file.replace(/'/g, "''");
+  const reader = file.toLowerCase().endsWith('.parquet') ? 'read_parquet' : 'read_csv_auto';
+  return `SELECT * FROM ${reader}('${escaped}')`;
 }
 
 // Escape a value for embedding in a double-quoted Python string
@@ -124,13 +139,15 @@ function renderCustom(c: CustomCheck): string {
 
 export function generateGE(req: GenerateRequest): string {
   const { table, checks, customChecks, connectionConfig } = req;
-  const fqn       = `${table.schema}.${table.table}`;
+  const isDuckDb  = connectionConfig?.type === 'duckdb';
+  const fqn       = isDuckDb ? `${table.table} (local file)` : `${table.schema}.${table.table}`;
   const suiteName = `${table.table}_suite`;
   const dsName    = `${table.schema}_datasource`;
   const valName   = `${table.table}_validation`;
 
   const connStr = connectionStringTemplate(connectionConfig, table.schema);
-  const isBigQuery = connectionConfig?.type === 'bigquery';
+  // BigQuery and DuckDB connection strings carry no password — no env var needed
+  const noEnvVar = isDuckDb || connectionConfig?.type === 'bigquery';
 
   const lines: string[] = [
     `# Great Expectations (GX Core 1.x) — ${fqn}`,
@@ -139,7 +156,7 @@ export function generateGE(req: GenerateRequest): string {
     installLine(connectionConfig?.type),
     `#`,
     `# Usage:`,
-    ...(isBigQuery
+    ...(noEnvVar
       ? [`#   python <this_file>.py`]
       : [
           `#   export DATABASE_URL="${connStr}"`,
@@ -147,13 +164,13 @@ export function generateGE(req: GenerateRequest): string {
         ]
     ),
     ``,
-    `import os`,
+    ...(noEnvVar ? [] : [`import os`]),
     `import great_expectations as gx`,
     ``,
     `context = gx.get_context()`,
     ``,
     `# ── Data source ─────────────────────────────────────────────────────────────`,
-    ...(isBigQuery
+    ...(noEnvVar
       ? [`CONNECTION_STRING = "${connStr}"`]
       : [
           `# Replace YOUR_PASSWORD, or export DATABASE_URL to skip this line entirely`,
@@ -165,11 +182,21 @@ export function generateGE(req: GenerateRequest): string {
     `    name="${dsName}",`,
     `    connection_string=CONNECTION_STRING,`,
     `)`,
-    `asset = data_source.add_table_asset(`,
-    `    name="${table.table}",`,
-    `    table_name="${table.table}",`,
-    `    schema_name="${table.schema}",`,
-    `)`,
+    ...(isDuckDb
+      ? [
+          `asset = data_source.add_query_asset(`,
+          `    name="${table.table}",`,
+          `    query="${duckdbFileQuery(connectionConfig, table.table)}",`,
+          `)`,
+        ]
+      : [
+          `asset = data_source.add_table_asset(`,
+          `    name="${table.table}",`,
+          `    table_name="${table.table}",`,
+          `    schema_name="${table.schema}",`,
+          `)`,
+        ]
+    ),
     `batch_definition = asset.add_batch_definition_whole_table("${table.table}_full_table")`,
     ``,
     `# ── Expectation suite ───────────────────────────────────────────────────────`,

@@ -2,10 +2,11 @@ import { ConnectionConfig, CustomCheck, GenerateRequest, SelectedCheck } from '.
 
 // ── configuration.yml comment block ────────────────────────────────────────
 
-function configComment(cfg: ConnectionConfig | undefined, schema: string): string[] {
+function configComment(cfg: ConnectionConfig | undefined, schema: string, table: string): string[] {
   const type = cfg?.type ?? 'postgres';
   const pkg  = sodaPackage(type);
-  const yml  = configYml(cfg, schema);
+  const yml  = configYml(cfg, schema, table);
+  const dsName = type === 'duckdb' ? table : schema;
 
   return [
     `# Soda Core — checks file`,
@@ -14,12 +15,14 @@ function configComment(cfg: ConnectionConfig | undefined, schema: string): strin
     `# 1. Install:  pip install ${pkg}`,
     `#`,
     `# 2. Save the following as configuration.yml`,
-    `#    (replace the password placeholder with the real value or use env substitution):`,
+    ...(type === 'duckdb'
+      ? [`#    (DuckDB reads the file directly — no credentials needed):`]
+      : [`#    (replace the password placeholder with the real value or use env substitution):`]),
     `#`,
     ...yml.map(l => `#   ${l}`),
     `#`,
     `# 3. Run:`,
-    `#      soda scan -d ${schema} -c configuration.yml <this_file>.yml`,
+    `#      soda scan -d ${dsName} -c configuration.yml <this_file>.yml`,
     ``,
   ];
 }
@@ -29,14 +32,34 @@ function sodaPackage(type: ConnectionConfig['type']): string {
     case 'snowflake': return 'soda-core-snowflake';
     case 'bigquery':  return 'soda-core-bigquery';
     case 'redshift':  return 'soda-core-redshift';
+    case 'duckdb':    return 'soda-core-duckdb';
     default:          return 'soda-core-postgres';
   }
 }
 
-function configYml(cfg: ConnectionConfig | undefined, schema: string): string[] {
+// Absolute path of the local file backing this table (DuckDB file sources)
+function duckdbFileFor(cfg: ConnectionConfig | undefined, table: string): string {
+  const file = cfg?.files?.find(f => {
+    const base = f.split(/[\\/]/).pop() ?? f;
+    return base.replace(/\.[^.]+$/, '') === table;
+  });
+  return file ?? `/path/to/${table}.csv`;
+}
+
+function configYml(cfg: ConnectionConfig | undefined, schema: string, table: string): string[] {
   if (!cfg) return defaultPostgresYml(schema);
 
   switch (cfg.type) {
+    case 'duckdb':
+      return [
+        `data_sources:`,
+        `  ${table}:`,
+        `    type: duckdb`,
+        `    database: ${duckdbFileFor(cfg, table)}`,
+        `    read_only: true`,
+        `# If your soda-core version rejects 'database', use 'path' instead`,
+      ];
+
     case 'snowflake':
       return [
         `data_sources:`,
@@ -157,10 +180,13 @@ function renderCustom(c: CustomCheck): string {
 
 export function generateSoda(req: GenerateRequest): string {
   const { table, checks, customChecks, connectionConfig } = req;
-  const tableFqn = `${table.schema}.${table.table}`;
+  // File-backed DuckDB datasets are named after the file stem — no schema prefix
+  const tableFqn = connectionConfig?.type === 'duckdb'
+    ? table.table
+    : `${table.schema}.${table.table}`;
 
   const lines: string[] = [
-    ...configComment(connectionConfig, table.schema),
+    ...configComment(connectionConfig, table.schema, table.table),
     `checks for ${tableFqn}:`,
   ];
 

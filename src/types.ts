@@ -51,7 +51,7 @@ export interface GenerateRequest {
 }
 
 export interface ConnectionConfig {
-  type: 'postgres' | 'redshift' | 'snowflake' | 'bigquery';
+  type: 'postgres' | 'redshift' | 'snowflake' | 'bigquery' | 'duckdb';
   // Postgres / Redshift
   host?: string;
   port?: number;
@@ -67,4 +67,6 @@ export interface ConnectionConfig {
   projectId?: string;
   keyFile?: string;
   dataset?: string;
+  // DuckDB local files — absolute paths to .csv / .parquet files
+  files?: string[];
 }

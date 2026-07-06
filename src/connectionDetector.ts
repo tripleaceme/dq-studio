@@ -169,10 +169,28 @@ export async function promptForConnection(): Promise<ConnectionConfig | null> {
       { label: '$(server-environment) Snowflake', value: 'snowflake' },
       { label: '$(cloud) BigQuery', value: 'bigquery' },
       { label: '$(link) Connection string (Postgres / Redshift)', value: 'connstring' },
+      { label: '$(files) Local files — CSV / Parquet (no database needed)', value: 'files' },
     ],
-    { placeHolder: 'Select your database type' }
+    { placeHolder: 'Select your database type — or point at local data files' }
   );
   if (!dbType) return null;
+
+  // Local files: no credentials at all — each file becomes a table,
+  // generated tests query the files with DuckDB
+  if (dbType.value === 'files') {
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: true,
+      filters: { 'Data files (CSV, Parquet)': ['csv', 'parquet'] },
+      openLabel: 'Select data files',
+      title: 'Select the CSV / Parquet files to build tests for',
+    });
+    if (!uris || uris.length === 0) return null;
+    return {
+      type: 'duckdb',
+      files: uris.map(u => u.fsPath),
+      database: 'local files',
+    };
+  }
 
   // BigQuery: browse for service account JSON
   if (dbType.value === 'bigquery') {

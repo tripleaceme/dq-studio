@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0] — 2026-07-06
+
+### Added
+- **Local files as a data source — no database needed.** Click ⚙ → *Local files* and select CSV or Parquet files; each file appears as a table in the sidebar with inferred column types, and everything else (check catalog, custom SQL checks, generation) works exactly as with a warehouse
+  - **CSV** types are inferred from a 256 KB sample (integer, double, boolean, timestamp, varchar), with quoted fields, embedded delimiters, and `;` / tab / `|` delimiters handled
+  - **Parquet** types are read from the file's own schema metadata (pure-JS reader, no native binaries in the extension)
+  - Generated **Soda** output uses a `type: duckdb` data source pointing directly at the file (`pip install soda-core-duckdb`)
+  - Generated **GE** output uses an in-memory DuckDB engine with a query asset over `read_csv_auto(...)` / `read_parquet(...)` (`pip install great_expectations duckdb duckdb-engine`)
+  - The file selection is persisted and restored on the next VS Code session, same as database credentials
+- **DuckDB dialect hint** — custom check field shows `Fail condition (DuckDB SQL)` when connected to local files
+
+---
+
 ## [0.2.2] — 2026-07-06
 
 ### Fixed
