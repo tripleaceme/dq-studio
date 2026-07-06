@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0] — 2026-07-06
+
+### Added
+- **Excel (`.xlsx`) files as a local data source** — select them alongside CSV/Parquet from ⚙ → Local files
+  - Column types are inferred from the typed cells of the first sheet (dates, booleans, and numbers arrive as real types, not strings)
+  - Generated **GE** output queries the workbook with `read_xlsx(..., header = true)` — DuckDB auto-installs its `excel` core extension on first use; `header = true` is set explicitly because auto-detection proved unreliable
+  - Generated **Soda** output includes a one-time bootstrap one-liner that builds a small `.duckdb` view over the sheet, since soda-core's DuckDB source can open CSV/Parquet paths but not `.xlsx`
+  - Uses SheetJS pinned from the official `cdn.sheetjs.com` tarball (the npm-registry copy is outdated with known CVEs), read via bundler-safe `XLSX.read(buffer)`
+
+---
+
 ## [0.3.0] — 2026-07-06
 
 ### Added

@@ -1,8 +1,8 @@
 {
   "name": "dq-studio",
   "displayName": "Data Quality Studio — GE & Soda Core",
-  "description": "Visual builder that generates Great Expectations and Soda Core data quality tests from your live database — or local CSV/Parquet files — no code required.",
-  "version": "0.3.0",
+  "description": "Visual builder that generates Great Expectations and Soda Core data quality tests from your live database — or local CSV/Excel/Parquet files — no code required.",
+  "version": "0.4.0",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
@@ -29,6 +29,8 @@
     "bigquery",
     "duckdb",
     "csv",
+    "excel",
+    "xlsx",
     "parquet"
   ],
   "publisher": "tripleaceme",
@@ -107,7 +109,8 @@
     "hyparquet": "^1.26.2",
     "js-yaml": "^4.1.0",
     "pg": "^8.11.3",
-    "snowflake-sdk": "^2.4.2"
+    "snowflake-sdk": "^2.4.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

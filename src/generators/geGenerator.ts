@@ -51,15 +51,19 @@ function installLine(type: ConnectionConfig['type'] | undefined): string {
   }
 }
 
-// DuckDB SELECT over the local file backing this table
+// DuckDB SELECT over the local file backing this table.
+// read_xlsx autoloads DuckDB's excel core extension on first use.
 function duckdbFileQuery(cfg: ConnectionConfig | undefined, table: string): string {
   const file = cfg?.files?.find(f => {
     const base = f.split(/[\\/]/).pop() ?? f;
     return base.replace(/\.[^.]+$/, '') === table;
   }) ?? `/path/to/${table}.csv`;
   const escaped = file.replace(/'/g, "''");
-  const reader = file.toLowerCase().endsWith('.parquet') ? 'read_parquet' : 'read_csv_auto';
-  return `SELECT * FROM ${reader}('${escaped}')`;
+  const lower = file.toLowerCase();
+  if (lower.endsWith('.parquet')) return `SELECT * FROM read_parquet('${escaped}')`;
+  // header auto-detection is unreliable — always name columns from the first row
+  if (lower.endsWith('.xlsx'))    return `SELECT * FROM read_xlsx('${escaped}', header = true)`;
+  return `SELECT * FROM read_csv_auto('${escaped}')`;
 }
 
 // Escape a value for embedding in a double-quoted Python string

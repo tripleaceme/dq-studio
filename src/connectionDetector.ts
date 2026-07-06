@@ -169,7 +169,7 @@ export async function promptForConnection(): Promise<ConnectionConfig | null> {
       { label: '$(server-environment) Snowflake', value: 'snowflake' },
       { label: '$(cloud) BigQuery', value: 'bigquery' },
       { label: '$(link) Connection string (Postgres / Redshift)', value: 'connstring' },
-      { label: '$(files) Local files — CSV / Parquet (no database needed)', value: 'files' },
+      { label: '$(files) Local files — CSV / Excel / Parquet (no database needed)', value: 'files' },
     ],
     { placeHolder: 'Select your database type — or point at local data files' }
   );
@@ -180,9 +180,9 @@ export async function promptForConnection(): Promise<ConnectionConfig | null> {
   if (dbType.value === 'files') {
     const uris = await vscode.window.showOpenDialog({
       canSelectMany: true,
-      filters: { 'Data files (CSV, Parquet)': ['csv', 'parquet'] },
+      filters: { 'Data files (CSV, Excel, Parquet)': ['csv', 'xlsx', 'parquet'] },
       openLabel: 'Select data files',
-      title: 'Select the CSV / Parquet files to build tests for',
+      title: 'Select the CSV / Excel / Parquet files to build tests for',
     });
     if (!uris || uris.length === 0) return null;
     return {

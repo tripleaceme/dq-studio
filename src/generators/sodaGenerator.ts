@@ -50,15 +50,35 @@ function configYml(cfg: ConnectionConfig | undefined, schema: string, table: str
   if (!cfg) return defaultPostgresYml(schema);
 
   switch (cfg.type) {
-    case 'duckdb':
+    case 'duckdb': {
+      const file = duckdbFileFor(cfg, table);
+
+      // Soda's DuckDB data source opens CSV/Parquet paths directly, but not
+      // .xlsx — Excel needs a one-time DuckDB database with a view over the file
+      if (file.toLowerCase().endsWith('.xlsx')) {
+        const dbFile = file.replace(/\.xlsx$/i, '.duckdb');
+        return [
+          `# Excel needs a one-time DuckDB build (Soda cannot open .xlsx directly).`,
+          `# Run this once — it creates ${dbFile} with a '${table}' view over the sheet:`,
+          `#   python -c "import duckdb; duckdb.connect('${dbFile}').execute(\\"CREATE VIEW ${table} AS SELECT * FROM read_xlsx('${file}', header = true)\\")"`,
+          ``,
+          `data_sources:`,
+          `  ${table}:`,
+          `    type: duckdb`,
+          `    database: ${dbFile}`,
+          `    read_only: true`,
+        ];
+      }
+
       return [
         `data_sources:`,
         `  ${table}:`,
         `    type: duckdb`,
-        `    database: ${duckdbFileFor(cfg, table)}`,
+        `    database: ${file}`,
         `    read_only: true`,
         `# If your soda-core version rejects 'database', use 'path' instead`,
       ];
+    }
 
     case 'snowflake':
       return [

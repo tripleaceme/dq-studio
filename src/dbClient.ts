@@ -289,6 +289,50 @@ function csvColumns(filePath: string): ColumnInfo[] {
   });
 }
 
+// ── Excel (.xlsx) — first sheet, sampled ────────────────────────────────────
+// SheetJS typed cells arrive as real JS values (cellDates gives Date objects),
+// so inference works on types rather than string patterns.
+
+const XLSX_SAMPLE_ROWS = 200;
+
+function inferCellType(values: unknown[]): { rawType: string; category: DataTypeCategory } {
+  const nonNull = values.filter(v => v !== null && v !== undefined && v !== '');
+  if (nonNull.length === 0) return { rawType: 'varchar', category: 'text' };
+  if (nonNull.every(v => v instanceof Date))        return { rawType: 'timestamp', category: 'timestamp' };
+  if (nonNull.every(v => typeof v === 'boolean'))   return { rawType: 'boolean',   category: 'boolean' };
+  if (nonNull.every(v => typeof v === 'number')) {
+    return nonNull.every(v => Number.isInteger(v as number))
+      ? { rawType: 'bigint', category: 'integer' }
+      : { rawType: 'double', category: 'numeric' };
+  }
+  if (nonNull.every(v => typeof v === 'string' && isDateLike(v))) return { rawType: 'timestamp', category: 'timestamp' };
+  return { rawType: 'varchar', category: 'text' };
+}
+
+async function xlsxColumns(filePath: string): Promise<ColumnInfo[]> {
+  const XLSX = await import('xlsx');
+  // Read the buffer ourselves: XLSX.readFile needs an fs reference that
+  // esbuild-bundled code doesn't provide, XLSX.read(buffer) is bundler-safe
+  const buf = fs.readFileSync(filePath);
+  const wb = XLSX.read(buf, { type: 'buffer', cellDates: true, sheetRows: XLSX_SAMPLE_ROWS + 1 });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error(`${path.basename(filePath)} has no sheets`);
+
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: null }) as unknown[][];
+  if (rows.length === 0) throw new Error(`${path.basename(filePath)} appears to be empty`);
+
+  const header = rows[0].map(h => (h === null || h === undefined ? '' : String(h).trim()));
+  const sample = rows.slice(1);
+  return header.map((name, idx) => {
+    const values = sample.map(r => r[idx] ?? null);
+    return {
+      name: name || `column_${idx}`,
+      ...inferCellType(values),
+      isNullable: values.some(v => v === null || v === ''),
+    };
+  });
+}
+
 // hyparquet SchemaElement — declared locally to keep the import dynamic-safe
 interface ParquetSchemaElement {
   name: string;
@@ -351,7 +395,10 @@ class LocalFilesAdapter implements DbAdapter {
   async getColumns(_schema: string, table: string): Promise<ColumnInfo[]> {
     const file = this.files().find(f => fileStem(f) === table);
     if (!file) throw new Error(`No local file matches table "${table}"`);
-    return file.toLowerCase().endsWith('.parquet') ? parquetColumns(file) : csvColumns(file);
+    const lower = file.toLowerCase();
+    if (lower.endsWith('.parquet')) return parquetColumns(file);
+    if (lower.endsWith('.xlsx'))    return xlsxColumns(file);
+    return csvColumns(file);
   }
 }
 
