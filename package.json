@@ -1,7 +1,7 @@
 {
   "name": "dq-studio",
   "displayName": "Data Quality Studio — GE & Soda Core",
-  "description": "Visual builder that generates Great Expectations and Soda Core data quality tests from your live database — or local CSV/Excel/Parquet files — no code required.",
+  "description": "Visual builder that generates Great Expectations and Soda Core data quality tests from your live database or local CSV/Excel/Parquet files.",
   "version": "0.4.0",
   "icon": "media/icon.png",
   "repository": {
@@ -12,7 +12,12 @@
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization",
+    "Data Science",
+    "Testing",
+    "Formatters",
+    "Snippets"
   ],
   "keywords": [
     "data quality",
@@ -92,7 +97,7 @@
         "dq-studio.credentialsPath": {
           "type": "string",
           "default": "",
-          "description": "Path to your credentials file — dbt profiles.yml, BigQuery service account JSON, or .env file. Overrides the default ~/.dbt/profiles.yml lookup. Supports ~ for home directory."
+          "description": "Path to your credentials file (dbt profiles.yml, BigQuery service account JSON, or .env file). Overrides the default ~/.dbt/profiles.yml lookup. Supports ~ for home directory."
         }
       }
     }
