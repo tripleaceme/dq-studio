@@ -26,7 +26,7 @@
 
 ### Added
 - **Snowflake and BigQuery support** — full adapter support alongside PostgreSQL and Redshift; auto-detected from `~/.dbt/profiles.yml`
-- **Custom credentials path** — set `dq-test-builder.credentialsPath` in VS Code Settings to any `profiles.yml`, BigQuery service account JSON, or `.env` file
+- **Custom credentials path** — set `dq-studio.credentialsPath` in VS Code Settings to any `profiles.yml`, BigQuery service account JSON, or `.env` file
 - **Framework choice persisted across sessions** — Soda Core / GE selection is stored in VS Code global state and restored on next launch; the picker is shown only once
 - **VS Code native check picker** — `+ Add check` now opens the command palette at the top of the editor (searchable, keyboard-navigable) instead of an inline dropdown
 - **Real connection values in generated output** — generated GE Python and Soda YAML include the actual host, port, database, and user from the active session; only the password remains as an env var placeholder
